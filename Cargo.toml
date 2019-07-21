@@ -1,0 +1,7 @@
+[package]
+name = "ray-marcher"
+version = "0.1.0"
+authors = ["Joan Rieu <joan@joanrieu.com>"]
+edition = "2018"
+
+[dependencies]
