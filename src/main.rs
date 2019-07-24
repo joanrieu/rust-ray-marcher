@@ -1,3 +1,4 @@
+extern crate image;
 extern crate nalgebra;
 
 type Scene = Vec<Mesh>;
@@ -124,13 +125,25 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
             // println!("{}x{}", near_screen.x, near_screen.y);
             let red = Color::new(1.0, 0.0, 0.0);
             let green = Color::new(0.0, 1.0, 0.0);
-            for channel in red.to_array().iter() {
+            let color = if x * x + y * y / 5 < 10000 {
+                red
+            } else {
+                green
+            };
+            for channel in color.to_array().iter() {
                 pixels.push(*channel);
             }
             // let world_near = projection_matrix.unproject_point(near)
         }
     }
     // println!("pixels: {}", pixels.len());
+    image::save_buffer(
+        "render.png",
+        pixels.as_ref(),
+        width as u32,
+        height as u32,
+        image::ColorType::RGB(8),
+    );
 }
 
 fn main() {
