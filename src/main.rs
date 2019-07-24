@@ -1,4 +1,5 @@
 extern crate image;
+extern crate indicatif;
 extern crate nalgebra;
 
 type Scene = Vec<Mesh>;
@@ -70,19 +71,26 @@ impl Color {
 fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     let projection_matrix =
         nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.znear, camera.zfar);
-    println!("projection: {}", projection_matrix.as_matrix());
+    // println!("projection: {}", projection_matrix.as_matrix());
     let view_matrix =
         nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &nalgebra::Vector3::y());
-    println!("view: {}", view_matrix);
+    // println!("view: {}", view_matrix);
     // for mesh in scene.iter() {
     //     let model = mesh.position.to_na_translation();
     //     println!("model: {}", model)
     // }
     let height = settings.definition as Float;
     let width = height * camera.aspect;
-    println!("width: {} height: {}", width, height);
+    // println!("width: {} height: {}", width, height);
     let mut pixels: Vec<u8> = Vec::new();
     pixels.reserve((width * height) as usize);
+    let bar = indicatif::ProgressBar::new(height as u64);
+    bar.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue} [ETA: {eta}]")
+            .progress_chars("##-"),
+    );
+    bar.set_message("Rendering");
     for y in 0..(height as Integer) {
         for x in 0..(width as Integer) {
             let mvp_x = 2.0 * (x as Float) / width - 1.0;
@@ -95,7 +103,7 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
             );
             let max_t = (target - origin).norm();
             let direction = (target - origin).normalize();
-            let color = march_ray(origin, direction, max_t, scene, camera, settings);
+            let color = march_ray(origin, direction, max_t, scene);
             // println!("{}", ray);
             // println!("{}x{}", near_screen.x, near_screen.y);
             for channel in color.to_pixel().iter() {
@@ -103,7 +111,10 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
                 pixels.push(*channel);
             }
         }
+        bar.inc(1);
     }
+    bar.set_message("Saving");
+    bar.enable_steady_tick(13);
     // println!("pixels: {}", pixels.len());
     image::save_buffer(
         "render.png",
@@ -113,16 +124,10 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         image::ColorType::RGB(8),
     )
     .unwrap();
+    bar.finish();
 }
 
-fn march_ray(
-    origin: Point,
-    direction: Vector,
-    max_t: Float,
-    scene: &Scene,
-    camera: &Camera,
-    settings: &RendererSettings,
-) -> Color {
+fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> Color {
     let mut t = 0.0;
     let mut closest_mesh: Option<&Mesh> = None;
     while t < max_t {
