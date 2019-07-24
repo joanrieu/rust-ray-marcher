@@ -24,7 +24,11 @@ struct Material {
     color: Color,
 }
 
-type Color = (u8, u8, u8);
+struct Color {
+    red: Float,
+    green: Float,
+    blue: Float,
+}
 
 struct Camera {
     eye: Vec3,
@@ -79,28 +83,63 @@ impl std::ops::Sub for &Vec3 {
     }
 }
 
+impl Color {
+    fn new(red: Float, green: Float, blue: Float) -> Color {
+        Color { red, green, blue }
+    }
+
+    fn to_array(&self) -> [u8; 3] {
+        return [
+            (self.red * 255.0) as u8,
+            (self.green * 255.0) as u8,
+            (self.blue * 255.0) as u8,
+        ];
+    }
+}
+
 fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
-    let projectionMatrix =
+    let projection_matrix =
         nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.znear, camera.zfar);
-    println!("projection: {}", projectionMatrix.as_matrix());
-    let viewMatrix = nalgebra::Isometry3::look_at_rh(
+    println!("projection: {}", projection_matrix.as_matrix());
+    let view_matrix = nalgebra::Isometry3::look_at_rh(
         &camera.eye.to_na_point(),
         &camera.target.to_na_point(),
         &nalgebra::Vector3::y(),
     );
-    println!("view: {}", viewMatrix);
-    for mesh in scene.iter() {
-        let model = mesh.position.to_na_translation();
-        println!("model: {}", model)
+    println!("view: {}", view_matrix);
+    // for mesh in scene.iter() {
+    //     let model = mesh.position.to_na_translation();
+    //     println!("model: {}", model)
+    // }
+    let height = settings.definition as Float;
+    let width = height * camera.aspect;
+    println!("width: {} height: {}", width, height);
+    let mut pixels: Vec<u8> = Vec::new();
+    pixels.reserve((width * height) as usize);
+    for y in 0..(height as Integer) {
+        for x in 0..(width as Integer) {
+            let mvp_x = 2.0 * (x as Float) / width - 1.0;
+            let mvp_y = 1.0 - 2.0 * (y as Float) / height;
+            let near_screen = Vec3::new(mvp_x, mvp_y, -1.0);
+            // println!("{}x{}", near_screen.x, near_screen.y);
+            let red = Color::new(1.0, 0.0, 0.0);
+            let green = Color::new(0.0, 1.0, 0.0);
+            for channel in red.to_array().iter() {
+                pixels.push(*channel);
+            }
+            // let world_near = projection_matrix.unproject_point(near)
+        }
     }
-    println!("render")
+    // println!("pixels: {}", pixels.len());
 }
 
 fn main() {
     let scene = vec![Mesh {
         position: Vec3::new(3.0, 2.0, -10.0),
         geometry: Geometry::Sphere { radius: 1.0 },
-        material: Material { color: (1, 2, 3) },
+        material: Material {
+            color: Color::new(1.0, 0.0, 0.0),
+        },
     }];
     let camera = Camera {
         eye: Vec3::new(0.0, 0.0, -10.0),
