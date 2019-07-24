@@ -121,7 +121,14 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         for x in 0..(width as Integer) {
             let mvp_x = 2.0 * (x as Float) / width - 1.0;
             let mvp_y = 1.0 - 2.0 * (y as Float) / height;
-            let near_screen = Vec3::new(mvp_x, mvp_y, -1.0);
+            let near = view_matrix.transform_point(
+                &projection_matrix.unproject_point(&nalgebra::Point3::new(mvp_x, mvp_y, -1.0)),
+            );
+            let far = view_matrix.inverse_transform_point(
+                &projection_matrix.unproject_point(&nalgebra::Point3::new(mvp_x, mvp_y, 1.0)),
+            );
+            let ray = (far - near).normalize();
+            // println!("{}", ray);
             // println!("{}x{}", near_screen.x, near_screen.y);
             let red = Color::new(1.0, 0.0, 0.0);
             let green = Color::new(0.0, 1.0, 0.0);
@@ -130,10 +137,10 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
             } else {
                 green
             };
-            for channel in color.to_array().iter() {
+            for channel in Color::new(ray.z.powf(10.0), 0.0, 0.0).to_array().iter() {
+                // for channel in color.to_array().iter() {
                 pixels.push(*channel);
             }
-            // let world_near = projection_matrix.unproject_point(near)
         }
     }
     // println!("pixels: {}", pixels.len());
@@ -143,7 +150,8 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         width as u32,
         height as u32,
         image::ColorType::RGB(8),
-    );
+    )
+    .unwrap();
 }
 
 fn main() {
