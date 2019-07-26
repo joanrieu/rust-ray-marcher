@@ -95,12 +95,13 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         for x in 0..(width as Integer) {
             let mvp_x = 2.0 * (x as Float) / width - 1.0;
             let mvp_y = 1.0 - 2.0 * (y as Float) / height;
-            let origin = view_matrix.transform_point(
+            let origin = view_matrix.inverse_transform_point(
                 &projection_matrix.unproject_point(&nalgebra::Point3::new(mvp_x, mvp_y, -1.0)),
             );
             let target = view_matrix.inverse_transform_point(
                 &projection_matrix.unproject_point(&nalgebra::Point3::new(mvp_x, mvp_y, 1.0)),
             );
+            // println!("from {} to {}", origin, target);
             let max_t = (target - origin).norm();
             let direction = (target - origin).normalize();
             let color = march_ray(origin, direction, max_t, scene);
@@ -154,16 +155,14 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
 
 fn main() {
     let scene = vec![Mesh {
-        position: nalgebra::Vector3::new(0.0, 0.0, 0.0),
-        // position: nalgebra::Vector3::new(3.0, 2.0, -10.0),
-        geometry: Geometry::Sphere { radius: 5.0 },
-        // geometry: Geometry::Sphere { radius: 1.0 },
+        position: nalgebra::Vector3::new(3.0, 2.0, -10.0),
+        geometry: Geometry::Sphere { radius: 3.0 },
         material: Material {
             color: Color::new(1.0, 0.0, 0.0),
         },
     }];
     let camera = Camera {
-        eye: Point::new(0.0, 0.0, -10.0),
+        eye: Point::new(0.0, 0.0, 10.0),
         target: Point::new(0.0, 0.0, 0.0),
         aspect: 3.0 / 2.0,
         fovy: 3.14 / 4.0,
