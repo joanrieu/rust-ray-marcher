@@ -42,6 +42,7 @@ type Point = nalgebra::Point3<Float>;
 
 struct RendererSettings {
     definition: Integer,
+    anti_aliasing: Integer,
 }
 
 type Integer = u32;
@@ -79,7 +80,7 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     //     let model = mesh.position.to_na_translation();
     //     println!("model: {}", model)
     // }
-    let height = settings.definition as Float;
+    let height = (settings.definition * settings.anti_aliasing) as Float;
     let width = height * camera.aspect;
     // println!("width: {} height: {}", width, height);
     let mut pixels: Vec<u8> = Vec::new();
@@ -117,14 +118,24 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     bar.set_message("Saving");
     bar.enable_steady_tick(13);
     // println!("pixels: {}", pixels.len());
+    let path = "render.png";
     image::save_buffer(
-        "render.png",
+        path,
         pixels.as_ref(),
         width as u32,
         height as u32,
         image::ColorType::RGB(8),
     )
     .unwrap();
+    image::open(path)
+        .unwrap()
+        .resize(
+            (width / settings.anti_aliasing as f32) as u32,
+            (height / settings.anti_aliasing as f32) as u32,
+            image::imageops::FilterType::Gaussian,
+        )
+        .save(path)
+        .unwrap();
     bar.finish();
 }
 
@@ -169,6 +180,9 @@ fn main() {
         znear: 1.0,
         zfar: 1000.0,
     };
-    let settings = RendererSettings { definition: 600 };
+    let settings = RendererSettings {
+        definition: 100,
+        anti_aliasing: 2,
+    };
     render(&scene, &camera, &settings)
 }
