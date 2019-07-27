@@ -73,8 +73,7 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     let projection_matrix =
         nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.znear, camera.zfar);
     // println!("projection: {}", projection_matrix.as_matrix());
-    let view_matrix =
-        nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &nalgebra::Vector3::y());
+    let view_matrix = nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &Vector::y());
     // println!("view: {}", view_matrix);
     // for mesh in scene.iter() {
     //     let model = mesh.position.to_na_translation();
@@ -97,10 +96,10 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
             let mvp_x = 2.0 * (x as Float) / width - 1.0;
             let mvp_y = 1.0 - 2.0 * (y as Float) / height;
             let origin = view_matrix.inverse_transform_point(
-                &projection_matrix.unproject_point(&nalgebra::Point3::new(mvp_x, mvp_y, -1.0)),
+                &projection_matrix.unproject_point(&Point::new(mvp_x, mvp_y, -1.0)),
             );
             let target = view_matrix.inverse_transform_point(
-                &projection_matrix.unproject_point(&nalgebra::Point3::new(mvp_x, mvp_y, 1.0)),
+                &projection_matrix.unproject_point(&Point::new(mvp_x, mvp_y, 1.0)),
             );
             // println!("from {} to {}", origin, target);
             let max_t = (target - origin).norm();
@@ -118,14 +117,16 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     bar.set_message("Saving");
     bar.enable_steady_tick(13);
     // println!("pixels: {}", pixels.len());
-    image::ImageRgb8(image::ImageBuffer::from_raw(width as u32, height as u32, pixels).unwrap())
-        .resize(
-            (width / settings.anti_aliasing as f32) as u32,
-            (height / settings.anti_aliasing as f32) as u32,
-            image::FilterType::Gaussian,
-        )
-        .save("render.png")
-        .unwrap();
+    image::ImageRgb8(
+        image::ImageBuffer::from_raw(width as Integer, height as Integer, pixels).unwrap(),
+    )
+    .resize(
+        (width / settings.anti_aliasing as Float) as Integer,
+        (height / settings.anti_aliasing as Float) as Integer,
+        image::FilterType::Gaussian,
+    )
+    .save("render.png")
+    .unwrap();
     bar.finish();
 }
 
@@ -153,7 +154,7 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
 
 fn main() {
     let scene = vec![Mesh {
-        position: nalgebra::Vector3::new(3.0, 2.0, -10.0),
+        position: Vector::new(3.0, 2.0, -10.0),
         geometry: Geometry::Sphere { radius: 3.0 },
         material: Material {
             color: Color::new(1.0, 0.0, 0.0),
