@@ -43,8 +43,8 @@ struct Camera {
     target: Point,
     aspect: Float,
     fovy: Float,
-    znear: Float,
-    zfar: Float,
+    z_near: Float,
+    z_far: Float,
 }
 
 type Point = nalgebra::Point3<Float>;
@@ -110,7 +110,7 @@ impl Color {
 
 fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     let projection_matrix =
-        nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.znear, camera.zfar);
+        nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.z_near, camera.z_far);
     let view_matrix = nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &Vector::y());
     let height = (settings.definition * settings.anti_aliasing) as Float;
     let width = height * camera.aspect;
@@ -210,11 +210,11 @@ fn main() {
         target: Point::new(0.0, 0.0, 0.0),
         aspect: 3.0 / 2.0,
         fovy: 3.14 / 4.0,
-        znear: 1.0,
-        zfar: 1000.0,
+        z_near: 1.0,
+        z_far: 100.0,
     };
     let settings = RendererSettings {
-        definition: 100,
+        definition: 200,
         anti_aliasing: 1,
         epsilon: 0.001,
     };
