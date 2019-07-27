@@ -135,6 +135,7 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
             .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue} [ETA: {eta}]")
             .progress_chars("##-"),
     );
+    bar.enable_steady_tick(400);
     bar.set_message("Rendering");
     bar.set_draw_delta((width * height / 100.0) as u64);
     let image = image::ImageRgb8(image::ImageBuffer::from_fn(
@@ -147,7 +148,6 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         },
     ));
     bar.set_message("Saving");
-    bar.enable_steady_tick(13);
     image
         .resize(
             (width / settings.anti_aliasing as Float) as Integer,
@@ -214,7 +214,7 @@ fn main() {
         zfar: 1000.0,
     };
     let settings = RendererSettings {
-        definition: 200,
+        definition: 100,
         anti_aliasing: 1,
         epsilon: 0.001,
     };
