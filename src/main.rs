@@ -22,7 +22,7 @@ struct Material {
     color: Color,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct Color {
     red: Float,
     green: Float,
@@ -144,7 +144,7 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
             .unwrap();
         // println!("distance = {}", distance);
         if distance < 0.1 {
-            return mesh.material.color.clone();
+            return mesh.material.color;
         }
         t += distance;
     }
