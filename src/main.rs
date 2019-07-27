@@ -118,23 +118,13 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     bar.set_message("Saving");
     bar.enable_steady_tick(13);
     // println!("pixels: {}", pixels.len());
-    let path = "render.png";
-    image::save_buffer(
-        path,
-        pixels.as_ref(),
-        width as u32,
-        height as u32,
-        image::ColorType::RGB(8),
-    )
-    .unwrap();
-    image::open(path)
-        .unwrap()
+    image::ImageRgb8(image::ImageBuffer::from_raw(width as u32, height as u32, pixels).unwrap())
         .resize(
             (width / settings.anti_aliasing as f32) as u32,
             (height / settings.anti_aliasing as f32) as u32,
-            image::imageops::FilterType::Gaussian,
+            image::FilterType::Gaussian,
         )
-        .save(path)
+        .save("render.png")
         .unwrap();
     bar.finish();
 }
