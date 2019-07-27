@@ -2,6 +2,8 @@ extern crate image;
 extern crate indicatif;
 extern crate nalgebra;
 
+use std::iter::FromIterator;
+
 type Scene = Vec<Mesh>;
 
 struct Mesh {
@@ -62,17 +64,32 @@ struct RendererSettings {
 type Integer = u32;
 
 impl Geometry {
-    fn triangle(corners: [Point; 3]) -> Self {
-        let x_axis = corners[1] - corners[0];
-        let y_axis = corners[2] - corners[0];
+    fn triangle(vertices: [Point; 3]) -> Self {
+        let x_axis = vertices[1] - vertices[0];
+        let y_axis = vertices[2] - vertices[0];
         let z_axis = x_axis.cross(&y_axis);
         let base_change_10 = nalgebra::Matrix3::from_columns(&[x_axis, y_axis, z_axis]);
-        let translation_10 = nalgebra::Translation3::from(corners[0].coords);
+        let translation_10 = nalgebra::Translation3::from(vertices[0].coords);
         let transform_10 = translation_10.to_homogeneous() * base_change_10.to_homogeneous();
         let transform_01 = transform_10.pseudo_inverse(0.0).unwrap();
         Geometry::Triangle {
             transform_01,
             transform_10,
+        }
+    }
+
+    fn triangle_strip(vertices: Vec<Point>) -> Self {
+        assert!(vertices.len() >= 3);
+        let a = &vertices;
+        let b = vertices.split_at(1).1;
+        let c = vertices.split_at(2).1;
+        Geometry::Group {
+            geometry: Vec::from_iter(
+                a.iter()
+                    .zip(b.iter())
+                    .zip(c.iter())
+                    .map(|((a, b), c)| Self::triangle([*a, *b, *c])),
+            ),
         }
     }
 
@@ -206,20 +223,12 @@ fn main() {
             material: red_material,
         },
         Mesh {
-            geometry: Geometry::Group {
-                geometry: vec![
-                    Geometry::triangle([
-                        Point::new(-2.0, 0.0, 0.0),
-                        Point::new(-3.0, 0.0, 0.0),
-                        Point::new(-2.0, 1.0, 0.0),
-                    ]),
-                    Geometry::triangle([
-                        Point::new(-3.0, 0.0, 0.0),
-                        Point::new(-2.0, 0.0, 0.0),
-                        Point::new(-1.0, -3.0, 1.0),
-                    ]),
-                ],
-            },
+            geometry: Geometry::triangle_strip(vec![
+                Point::new(-2.0, 0.0, 0.0),
+                Point::new(-3.0, 0.0, 0.0),
+                Point::new(-2.0, 1.0, 0.0),
+                Point::new(-1.0, -3.0, 1.0),
+            ]),
             material: red_material,
         },
     ];
