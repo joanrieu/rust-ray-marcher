@@ -14,7 +14,7 @@ type Float = f32;
 type Vector = nalgebra::Vector3<Float>;
 
 enum Geometry {
-    Sphere { position: Vector, radius: Float },
+    Sphere { position: Point, radius: Float },
 }
 
 struct Material {
@@ -46,10 +46,10 @@ struct RendererSettings {
 
 type Integer = u32;
 
-impl Mesh {
+impl Geometry {
     fn distance(&self, point: &Point) -> Float {
-        match self.geometry {
-            Geometry::Sphere { position, radius } => (point - position).coords.norm() - radius,
+        match self {
+            Geometry::Sphere { position, radius } => (point - position).norm() - radius,
         }
     }
 }
@@ -125,7 +125,7 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
         let point = origin + t * direction;
         let (mesh, distance) = scene
             .iter()
-            .map(|mesh| (mesh, mesh.distance(&point)))
+            .map(|mesh| (mesh, mesh.geometry.distance(&point)))
             .min_by(|(_mesh1, distance1), (_mesh2, distance2)| {
                 distance1.partial_cmp(distance2).unwrap()
             })
@@ -141,7 +141,7 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
 fn main() {
     let scene = vec![Mesh {
         geometry: Geometry::Sphere {
-            position: Vector::new(3.0, 2.0, -10.0),
+            position: Point::new(3.0, 2.0, -10.0),
             radius: 3.0,
         },
         material: Material {
