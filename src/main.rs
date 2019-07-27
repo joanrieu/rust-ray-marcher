@@ -131,25 +131,22 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
 
 fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> Color {
     let mut t = 0.0;
-    let mut closest_mesh: Option<&Mesh> = None;
     while t < max_t {
         // println!("t = {}", t);
         let point = origin + t * direction;
         // println!("point = {}", point);
-        let mut min_distance = std::f32::INFINITY;
-        for mesh in scene {
-            let distance = mesh.distance(&point);
-            if distance < min_distance {
-                min_distance = distance;
-                closest_mesh = Some(mesh);
-            }
-            // println!("distance = {}", distance);
+        let (mesh, distance) = scene
+            .iter()
+            .map(|mesh| (mesh, mesh.distance(&point)))
+            .min_by(|(_mesh1, distance1), (_mesh2, distance2)| {
+                distance1.partial_cmp(distance2).unwrap()
+            })
+            .unwrap();
+        // println!("distance = {}", distance);
+        if distance < 0.1 {
+            return mesh.material.color.clone();
         }
-        // println!("min_distance = {}", min_distance);
-        if min_distance < 0.1 {
-            return closest_mesh.unwrap().material.color.clone();
-        }
-        t += min_distance;
+        t += distance;
     }
     Color::new(0.2, 0.2, 0.2)
 }
