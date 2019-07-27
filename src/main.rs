@@ -14,9 +14,17 @@ type Float = f32;
 type Vector = nalgebra::Vector3<Float>;
 
 enum Geometry {
-    Sphere { position: Point, radius: Float },
-    Triangle { corners: [Point; 3] },
+    Sphere {
+        position: Point,
+        radius: Float,
+    },
+    Triangle {
+        transform_01: Matrix,
+        transform_10: Matrix,
+    },
 }
+
+type Matrix = nalgebra::Matrix4<Float>;
 
 #[derive(Clone, Copy)]
 struct Material {
@@ -49,46 +57,37 @@ struct RendererSettings {
 type Integer = u32;
 
 impl Geometry {
+    fn triangle(corners: [Point; 3]) -> Self {
+        let x_axis = corners[1] - corners[0];
+        let y_axis = corners[2] - corners[0];
+        let z_axis = x_axis.cross(&y_axis);
+        let base_change_10 = nalgebra::Matrix3::from_columns(&[x_axis, y_axis, z_axis]);
+        let translation_10 = nalgebra::Translation3::from(corners[0].coords);
+        let transform_10 = translation_10.to_homogeneous() * base_change_10.to_homogeneous();
+        let transform_01 = transform_10.pseudo_inverse(0.0).unwrap();
+        Geometry::Triangle {
+            transform_01,
+            transform_10,
+        }
+    }
+
     fn distance(&self, point: &Point) -> Float {
         match self {
             Geometry::Sphere { position, radius } => (point - position).norm() - radius,
-            Geometry::Triangle { corners } => {
-                let x_axis = corners[1] - corners[0];
-                let y_axis = corners[2] - corners[0];
-                let z_axis = x_axis.cross(&y_axis);
-                let base_to_world = nalgebra::Matrix3::from_columns(&[x_axis, y_axis, z_axis]);
-                let world_to_base = base_to_world.pseudo_inverse(std::f32::EPSILON).unwrap();
-                let translation = nalgebra::Translation3::from(corners[0].coords).inverse();
-                let point_in_base = world_to_base * (translation * point);
-                let x = if point_in_base.coords.x < 0.0 {
-                    0.0
-                } else {
-                    point_in_base.coords.x
-                };
-                let y = if point_in_base.coords.y < 0.0 {
-                    0.0
-                } else {
-                    point_in_base.coords.y
-                };
+            Geometry::Triangle {
+                transform_01,
+                transform_10,
+            } => {
+                let point_0 = point;
+                let point_1 =
+                    Point::from_homogeneous(transform_01 * point_0.to_homogeneous()).unwrap();
+                let x = point_1.coords.x.max(0.0);
+                let y = point_1.coords.y.max(0.0);
                 let z = 0.0;
-                let w = if x + y > 1.0 { x + y } else { 1.0 };
-                let projected_point_in_base =
-                    nalgebra::Point3::from_homogeneous(nalgebra::Vector4::from([x, y, z, w]))
-                        .unwrap();
-                // TODO reproject in world to preserve norm (compared to other meshes)
-                let vector_in_base = point_in_base - projected_point_in_base;
-                let vector = base_to_world * vector_in_base;
-                return vector.norm();
-                // unimplemented!()
-                // corners
-                //     .iter()
-                //     .map(|corner| Geometry::Sphere {
-                //         position: *corner,
-                //         radius: 0.1,
-                //     })
-                //     .map(|sphere| sphere.distance(point))
-                //     .min_by(|a, b| a.partial_cmp(b).unwrap())
-                //     .unwrap()
+                let w = (x + y).max(1.0);
+                let projected_1 = nalgebra::Vector4::from([x, y, z, w]);
+                let projected_0 = Point::from_homogeneous(transform_10 * projected_1).unwrap();
+                return (point_0 - projected_0).norm();
             }
         }
     }
@@ -191,13 +190,11 @@ fn main() {
             material: red_material,
         },
         Mesh {
-            geometry: Geometry::Triangle {
-                corners: [
-                    Point::new(-2.0, 0.0, 0.0),
-                    Point::new(-3.0, 0.0, 0.0),
-                    Point::new(-2.0, 1.0, 0.0),
-                ],
-            },
+            geometry: Geometry::triangle([
+                Point::new(-2.0, 0.0, 0.0),
+                Point::new(-3.0, 0.0, 0.0),
+                Point::new(-2.0, 1.0, 0.0),
+            ]),
             material: red_material,
         },
     ];
