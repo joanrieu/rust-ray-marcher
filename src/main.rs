@@ -52,6 +52,7 @@ type Point = nalgebra::Point3<Float>;
 struct RendererSettings {
     definition: Integer,
     anti_aliasing: Integer,
+    epsilon: Float,
 }
 
 type Integer = u32;
@@ -125,7 +126,7 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         let origin_to_target = target - origin;
         let max_t = origin_to_target.norm();
         let direction = origin_to_target.unscale(max_t);
-        let color = march_ray(origin, direction, max_t, scene);
+        let color = march_ray(origin, direction, max_t, scene, settings);
         color
     };
     let bar = indicatif::ProgressBar::new((width * height) as u64);
@@ -158,7 +159,13 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     bar.finish();
 }
 
-fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> Color {
+fn march_ray(
+    origin: Point,
+    direction: Vector,
+    max_t: Float,
+    scene: &Scene,
+    settings: &RendererSettings,
+) -> Color {
     let mut t = 0.0;
     while t < max_t {
         let point = origin + t * direction;
@@ -169,7 +176,7 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
                 distance1.partial_cmp(distance2).unwrap()
             })
             .unwrap();
-        if distance < 0.1 {
+        if distance < settings.epsilon {
             return mesh.material.color;
         }
         t += distance;
@@ -209,6 +216,7 @@ fn main() {
     let settings = RendererSettings {
         definition: 200,
         anti_aliasing: 1,
+        epsilon: 0.001,
     };
     render(&scene, &camera, &settings)
 }
