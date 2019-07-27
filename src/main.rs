@@ -5,7 +5,6 @@ extern crate nalgebra;
 type Scene = Vec<Mesh>;
 
 struct Mesh {
-    position: Vector,
     geometry: Geometry,
     material: Material,
 }
@@ -15,7 +14,7 @@ type Float = f32;
 type Vector = nalgebra::Vector3<Float>;
 
 enum Geometry {
-    Sphere { radius: Float },
+    Sphere { position: Vector, radius: Float },
 }
 
 struct Material {
@@ -50,7 +49,7 @@ type Integer = u32;
 impl Mesh {
     fn distance(&self, point: &Point) -> Float {
         match self.geometry {
-            Geometry::Sphere { radius } => (point - &self.position).coords.norm() - radius,
+            Geometry::Sphere { position, radius } => (point - position).coords.norm() - radius,
         }
     }
 }
@@ -141,8 +140,10 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
 
 fn main() {
     let scene = vec![Mesh {
-        position: Vector::new(3.0, 2.0, -10.0),
-        geometry: Geometry::Sphere { radius: 3.0 },
+        geometry: Geometry::Sphere {
+            position: Vector::new(3.0, 2.0, -10.0),
+            radius: 3.0,
+        },
         material: Material {
             color: Color::new(1.0, 0.0, 0.0),
         },
