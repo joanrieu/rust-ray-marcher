@@ -22,6 +22,9 @@ enum Geometry {
         transform_01: Matrix,
         transform_10: Matrix,
     },
+    Group {
+        geometry: Vec<Geometry>,
+    },
 }
 
 type Matrix = nalgebra::Matrix4<Float>;
@@ -91,6 +94,11 @@ impl Geometry {
                 let projected_0 = Point::from_homogeneous(transform_10 * projected_1).unwrap();
                 return (point_0 - projected_0).norm();
             }
+            Geometry::Group { geometry } => geometry
+                .iter()
+                .map(|geometry| geometry.distance(point))
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap(),
         }
     }
 }
@@ -198,11 +206,20 @@ fn main() {
             material: red_material,
         },
         Mesh {
-            geometry: Geometry::triangle([
-                Point::new(-2.0, 0.0, 0.0),
-                Point::new(-3.0, 0.0, 0.0),
-                Point::new(-2.0, 1.0, 0.0),
-            ]),
+            geometry: Geometry::Group {
+                geometry: vec![
+                    Geometry::triangle([
+                        Point::new(-2.0, 0.0, 0.0),
+                        Point::new(-3.0, 0.0, 0.0),
+                        Point::new(-2.0, 1.0, 0.0),
+                    ]),
+                    Geometry::triangle([
+                        Point::new(-3.0, 0.0, 0.0),
+                        Point::new(-2.0, 0.0, 0.0),
+                        Point::new(-1.0, -3.0, 1.0),
+                    ]),
+                ],
+            },
             material: red_material,
         },
     ];
