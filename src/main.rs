@@ -61,81 +61,69 @@ impl Color {
     }
 
     fn to_pixel(&self) -> [u8; 3] {
-        return [
+        [
             (self.red * 255.0) as u8,
             (self.green * 255.0) as u8,
             (self.blue * 255.0) as u8,
-        ];
+        ]
     }
 }
 
 fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     let projection_matrix =
         nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.znear, camera.zfar);
-    // println!("projection: {}", projection_matrix.as_matrix());
     let view_matrix = nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &Vector::y());
-    // println!("view: {}", view_matrix);
-    // for mesh in scene.iter() {
-    //     let model = mesh.position.to_na_translation();
-    //     println!("model: {}", model)
-    // }
     let height = (settings.definition * settings.anti_aliasing) as Float;
     let width = height * camera.aspect;
-    // println!("width: {} height: {}", width, height);
-    let mut pixels: Vec<u8> = Vec::new();
-    pixels.reserve((width * height) as usize);
-    let bar = indicatif::ProgressBar::new(height as u64);
+    let render_pixel = |x, y| {
+        let mvp_x = 2.0 * (x as Float) / width - 1.0;
+        let mvp_y = 1.0 - 2.0 * (y as Float) / height;
+        let origin = view_matrix.inverse_transform_point(
+            &projection_matrix.unproject_point(&Point::new(mvp_x, mvp_y, -1.0)),
+        );
+        let target = view_matrix.inverse_transform_point(
+            &projection_matrix.unproject_point(&Point::new(mvp_x, mvp_y, 1.0)),
+        );
+        let origin_to_target = target - origin;
+        let max_t = origin_to_target.norm();
+        let direction = origin_to_target.unscale(max_t);
+        let color = march_ray(origin, direction, max_t, scene);
+        color
+    };
+    let bar = indicatif::ProgressBar::new((width * height) as u64);
     bar.set_style(
         indicatif::ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue} [ETA: {eta}]")
             .progress_chars("##-"),
     );
     bar.set_message("Rendering");
-    for y in 0..(height as Integer) {
-        for x in 0..(width as Integer) {
-            let mvp_x = 2.0 * (x as Float) / width - 1.0;
-            let mvp_y = 1.0 - 2.0 * (y as Float) / height;
-            let origin = view_matrix.inverse_transform_point(
-                &projection_matrix.unproject_point(&Point::new(mvp_x, mvp_y, -1.0)),
-            );
-            let target = view_matrix.inverse_transform_point(
-                &projection_matrix.unproject_point(&Point::new(mvp_x, mvp_y, 1.0)),
-            );
-            // println!("from {} to {}", origin, target);
-            let max_t = (target - origin).norm();
-            let direction = (target - origin).normalize();
-            let color = march_ray(origin, direction, max_t, scene);
-            // println!("{}", ray);
-            // println!("{}x{}", near_screen.x, near_screen.y);
-            for channel in color.to_pixel().iter() {
-                // for channel in color.to_array().iter() {
-                pixels.push(*channel);
-            }
-        }
-        bar.inc(1);
-    }
+    bar.set_draw_delta((width * height / 100.0) as u64);
+    let image = image::ImageRgb8(image::ImageBuffer::from_fn(
+        width as Integer,
+        height as Integer,
+        |x, y| {
+            let pixel = image::Rgb(render_pixel(x, y).to_pixel());
+            bar.inc(1);
+            pixel
+        },
+    ));
     bar.set_message("Saving");
     bar.enable_steady_tick(13);
-    // println!("pixels: {}", pixels.len());
-    image::ImageRgb8(
-        image::ImageBuffer::from_raw(width as Integer, height as Integer, pixels).unwrap(),
-    )
-    .resize(
-        (width / settings.anti_aliasing as Float) as Integer,
-        (height / settings.anti_aliasing as Float) as Integer,
-        image::FilterType::Gaussian,
-    )
-    .save("render.png")
-    .unwrap();
+    image
+        .resize(
+            (width / settings.anti_aliasing as Float) as Integer,
+            (height / settings.anti_aliasing as Float) as Integer,
+            image::FilterType::Gaussian,
+        )
+        .save("render.png")
+        .unwrap();
     bar.finish();
 }
 
 fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> Color {
     let mut t = 0.0;
     while t < max_t {
-        // println!("t = {}", t);
         let point = origin + t * direction;
-        // println!("point = {}", point);
         let (mesh, distance) = scene
             .iter()
             .map(|mesh| (mesh, mesh.distance(&point)))
@@ -143,7 +131,6 @@ fn march_ray(origin: Point, direction: Vector, max_t: Float, scene: &Scene) -> C
                 distance1.partial_cmp(distance2).unwrap()
             })
             .unwrap();
-        // println!("distance = {}", distance);
         if distance < 0.1 {
             return mesh.material.color;
         }
