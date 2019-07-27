@@ -53,6 +53,7 @@ struct RendererSettings {
     definition: Integer,
     anti_aliasing: Integer,
     epsilon: Float,
+    ambient_color: Color,
 }
 
 type Integer = u32;
@@ -181,7 +182,7 @@ fn march_ray(
         }
         t += distance;
     }
-    Color::new(0.2, 0.2, 0.2)
+    settings.ambient_color
 }
 
 fn main() {
@@ -214,9 +215,10 @@ fn main() {
         z_far: 100.0,
     };
     let settings = RendererSettings {
-        definition: 200,
+        definition: 100,
         anti_aliasing: 1,
         epsilon: 0.001,
+        ambient_color: Color::new(0.2, 0.2, 0.2),
     };
     render(&scene, &camera, &settings)
 }
