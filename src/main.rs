@@ -231,9 +231,13 @@ fn main() {
             ]),
             material: red_material,
         },
+        Mesh {
+            geometry: load_obj("teapot-low.obj"),
+            material: red_material,
+        },
     ];
     let camera = Camera {
-        eye: Point::new(0.0, 0.0, 10.0),
+        eye: Point::new(0.0, 0.0, 30.0),
         target: Point::new(0.0, 0.0, 0.0),
         aspect: 3.0 / 2.0,
         fovy: 3.14 / 4.0,
@@ -241,10 +245,66 @@ fn main() {
         z_far: 100.0,
     };
     let settings = RendererSettings {
-        definition: 100,
+        definition: 30,
         anti_aliasing: 1,
-        epsilon: 0.001,
+        epsilon: 0.01,
         ambient_color: Color::new(0.2, 0.2, 0.2),
     };
     render(&scene, &camera, &settings)
+}
+
+fn load_obj(path: &str) -> Geometry {
+    let spinner = indicatif::ProgressBar::new_spinner();
+    let mut points = vec![];
+    let mut faces = vec![];
+    String::from_utf8(std::fs::read(path).expect("cannot open file"))
+        .unwrap()
+        .split("\n")
+        .for_each(|line| {
+            spinner.set_message(line);
+            let mut parts = line.trim().split_whitespace();
+            match parts.next() {
+                Some("v") => {
+                    let coords = parts
+                        .map(|part| part.parse().expect("cannot parse coordinate"))
+                        .collect::<Vec<Float>>();
+                    assert_eq!(coords.len(), 3);
+                    points.push(Point::new(
+                        *coords.get(0).unwrap(),
+                        *coords.get(1).unwrap(),
+                        *coords.get(2).unwrap(),
+                    ))
+                }
+                Some("f") => {
+                    let points = parts
+                        .map(|part| {
+                            part.split("/")
+                                .next()
+                                .unwrap()
+                                .parse::<usize>()
+                                .expect("cannot parse vertex index")
+                        })
+                        .map(|index| points.get(index - 1).expect("cannot find vertex at index"))
+                        .collect::<Vec<&Point>>();
+                    assert!(points.len() == 3 || points.len() == 4);
+                    if points.len() == 3 {
+                        faces.push(Geometry::triangle([
+                            **points.get(0).unwrap(),
+                            **points.get(1).unwrap(),
+                            **points.get(2).unwrap(),
+                        ]))
+                    } else {
+                        faces.push(Geometry::triangle_strip(vec![
+                            **points.get(0).unwrap(),
+                            **points.get(1).unwrap(),
+                            **points.get(2).unwrap(),
+                            **points.get(3).unwrap(),
+                        ]))
+                    }
+                }
+                _ => (),
+            }
+        });
+    spinner.finish_and_clear();
+    Geometry::Group { geometry: faces }
 }
