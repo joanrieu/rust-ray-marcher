@@ -21,6 +21,8 @@ enum Geometry {
         radius: Float,
     },
     Triangle {
+        bounding_sphere_center: Point,
+        bounding_sphere_radius: Float,
         transform_01: Matrix,
         transform_10: Matrix,
     },
@@ -65,6 +67,14 @@ type Integer = u32;
 
 impl Geometry {
     fn triangle(vertices: [Point; 3]) -> Self {
+        let bounding_sphere_center = Point::from(
+            (vertices[0].coords + vertices[1].coords + vertices[2].coords).unscale(3.0),
+        );
+        let bounding_sphere_radius = vertices
+            .iter()
+            .map(|vertex| nalgebra::distance(vertex, &bounding_sphere_center))
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
         let x_axis = vertices[1] - vertices[0];
         let y_axis = vertices[2] - vertices[0];
         let z_axis = x_axis.cross(&y_axis);
@@ -73,6 +83,8 @@ impl Geometry {
         let transform_10 = translation_10.to_homogeneous() * base_change_10.to_homogeneous();
         let transform_01 = transform_10.pseudo_inverse(0.0).unwrap();
         Geometry::Triangle {
+            bounding_sphere_center,
+            bounding_sphere_radius,
             transform_01,
             transform_10,
         }
@@ -93,27 +105,35 @@ impl Geometry {
         }
     }
 
-    fn distance(&self, point: &Point) -> Float {
+    fn distance(&self, point: &Point, settings: &RendererSettings) -> Float {
         match self {
-            Geometry::Sphere { position, radius } => (point - position).norm() - radius,
+            Geometry::Sphere { position, radius } => nalgebra::distance(point, position) - radius,
             Geometry::Triangle {
+                bounding_sphere_center,
+                bounding_sphere_radius,
                 transform_01,
                 transform_10,
             } => {
-                let point_0 = point;
-                let point_1 =
-                    Point::from_homogeneous(transform_01 * point_0.to_homogeneous()).unwrap();
-                let x = point_1.coords.x.max(0.0);
-                let y = point_1.coords.y.max(0.0);
-                let z = 0.0;
-                let w = (x + y).max(1.0);
-                let projected_1 = nalgebra::Vector4::from([x, y, z, w]);
-                let projected_0 = Point::from_homogeneous(transform_10 * projected_1).unwrap();
-                return (point_0 - projected_0).norm();
+                let bounding_sphere_distance =
+                    nalgebra::distance(point, bounding_sphere_center) - *bounding_sphere_radius;
+                if bounding_sphere_distance > settings.epsilon {
+                    bounding_sphere_distance
+                } else {
+                    let point_0 = point;
+                    let point_1 =
+                        Point::from_homogeneous(transform_01 * point_0.to_homogeneous()).unwrap();
+                    let x = point_1.coords.x.max(0.0);
+                    let y = point_1.coords.y.max(0.0);
+                    let z = 0.0;
+                    let w = (x + y).max(1.0);
+                    let projected_1 = nalgebra::Vector4::from([x, y, z, w]);
+                    let projected_0 = Point::from_homogeneous(transform_10 * projected_1).unwrap();
+                    nalgebra::distance(point_0, &projected_0)
+                }
             }
             Geometry::Group { geometry } => geometry
                 .iter()
-                .map(|geometry| geometry.distance(point))
+                .map(|geometry| geometry.distance(point, settings))
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap(),
         }
@@ -197,7 +217,7 @@ fn march_ray(
         let point = origin + t * direction;
         let (mesh, distance) = scene
             .iter()
-            .map(|mesh| (mesh, mesh.geometry.distance(&point)))
+            .map(|mesh| (mesh, mesh.geometry.distance(&point, settings)))
             .min_by(|(_mesh1, distance1), (_mesh2, distance2)| {
                 distance1.partial_cmp(distance2).unwrap()
             })
@@ -224,20 +244,20 @@ fn main() {
         },
         Mesh {
             geometry: Geometry::triangle_strip(vec![
-                Point::new(-2.0, 0.0, 0.0),
-                Point::new(-3.0, 0.0, 0.0),
                 Point::new(-2.0, 1.0, 0.0),
+                Point::new(-3.0, 0.0, 0.0),
+                Point::new(-2.0, 0.0, 0.0),
                 Point::new(-1.0, -3.0, 1.0),
             ]),
             material: red_material,
         },
-        Mesh {
-            geometry: load_obj("teapot-low.obj"),
-            material: red_material,
-        },
+        // Mesh {
+        //     geometry: load_obj("teapot-low.obj"),
+        //     material: red_material,
+        // },
     ];
     let camera = Camera {
-        eye: Point::new(0.0, 0.0, 30.0),
+        eye: Point::new(0.0, 0.0, 10.0),
         target: Point::new(0.0, 0.0, 0.0),
         aspect: 3.0 / 2.0,
         fovy: 3.14 / 4.0,
@@ -245,9 +265,9 @@ fn main() {
         z_far: 100.0,
     };
     let settings = RendererSettings {
-        definition: 30,
+        definition: 800,
         anti_aliasing: 1,
-        epsilon: 0.01,
+        epsilon: 0.001,
         ambient_color: Color::new(0.2, 0.2, 0.2),
     };
     render(&scene, &camera, &settings)
