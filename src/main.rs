@@ -116,7 +116,8 @@ impl Geometry {
             } => {
                 let bounding_sphere_distance =
                     nalgebra::distance(point, bounding_sphere_center) - *bounding_sphere_radius;
-                if bounding_sphere_distance > settings.epsilon {
+                let triangle_depth = 0.1;
+                if bounding_sphere_distance > triangle_depth {
                     bounding_sphere_distance
                 } else {
                     let point_0 = point;
@@ -124,7 +125,7 @@ impl Geometry {
                         Point::from_homogeneous(transform_01 * point_0.to_homogeneous()).unwrap();
                     let x = point_1.coords.x.max(0.0);
                     let y = point_1.coords.y.max(0.0);
-                    let z = 0.0;
+                    let z = point_1.coords.z.max(0.0).min(triangle_depth);
                     let w = (x + y).max(1.0);
                     let projected_1 = nalgebra::Vector4::from([x, y, z, w]);
                     let projected_0 = Point::from_homogeneous(transform_10 * projected_1).unwrap();
@@ -265,8 +266,8 @@ fn main() {
         z_far: 100.0,
     };
     let settings = RendererSettings {
-        definition: 800,
-        anti_aliasing: 1,
+        definition: 400,
+        anti_aliasing: 2,
         epsilon: 0.001,
         ambient_color: Color::new(0.2, 0.2, 0.2),
     };
