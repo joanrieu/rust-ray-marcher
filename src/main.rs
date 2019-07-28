@@ -48,6 +48,7 @@ struct Color {
 struct Camera {
     eye: Point,
     target: Point,
+    up: UnitVector,
     aspect: Float,
     fovy: Float,
     z_near: Float,
@@ -55,6 +56,8 @@ struct Camera {
 }
 
 type Point = nalgebra::Point3<Float>;
+
+type UnitVector = nalgebra::Unit<Vector>;
 
 struct RendererSettings {
     definition: Integer,
@@ -158,7 +161,7 @@ impl Color {
 fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     let projection_matrix =
         nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.z_near, camera.z_far);
-    let view_matrix = nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &Vector::y());
+    let view_matrix = nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &camera.up);
     let height = (settings.definition * settings.anti_aliasing) as Float;
     let width = height * camera.aspect;
     let render_pixel = |x, y| {
@@ -170,11 +173,8 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         let target = view_matrix.inverse_transform_point(
             &projection_matrix.unproject_point(&Point::new(mvp_x, mvp_y, 1.0)),
         );
-        let origin_to_target = target - origin;
-        let max_t = origin_to_target.norm();
-        let direction = origin_to_target.unscale(max_t);
-        let color = march_ray(origin, direction, max_t, scene, settings);
-        color
+        let (direction, max_distance) = UnitVector::new_and_get(target - origin);
+        march_ray(origin, direction, max_distance, scene, settings)
     };
     let bar = indicatif::ProgressBar::new((width * height) as u64);
     bar.set_style(
@@ -208,14 +208,14 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
 
 fn march_ray(
     origin: Point,
-    direction: Vector,
-    max_t: Float,
+    direction: UnitVector,
+    max_distance: Float,
     scene: &Scene,
     settings: &RendererSettings,
 ) -> Color {
     let mut t = 0.0;
-    while t < max_t {
-        let point = origin + t * direction;
+    while t < max_distance {
+        let point = origin + t * direction.into_inner();
         let (mesh, distance) = scene
             .iter()
             .map(|mesh| (mesh, mesh.geometry.distance(&point, settings)))
@@ -252,14 +252,15 @@ fn main() {
             ]),
             material: red_material,
         },
-        // Mesh {
-        //     geometry: load_obj("teapot-low.obj"),
-        //     material: red_material,
-        // },
+        Mesh {
+            geometry: load_obj("teapot-low.obj"),
+            material: red_material,
+        },
     ];
     let camera = Camera {
-        eye: Point::new(0.0, 0.0, 10.0),
+        eye: Point::new(0.0, 50.0, 0.0),
         target: Point::new(0.0, 0.0, 0.0),
+        up: nalgebra::Unit::new_unchecked(Vector::new(0.0, 0.0, 1.0)),
         aspect: 3.0 / 2.0,
         fovy: 3.14 / 4.0,
         z_near: 1.0,
@@ -267,7 +268,7 @@ fn main() {
     };
     let settings = RendererSettings {
         definition: 400,
-        anti_aliasing: 2,
+        anti_aliasing: 1,
         epsilon: 0.001,
         ambient_color: Color::new(0.2, 0.2, 0.2),
     };
@@ -308,19 +309,17 @@ fn load_obj(path: &str) -> Geometry {
                         .map(|index| points.get(index - 1).expect("cannot find vertex at index"))
                         .collect::<Vec<&Point>>();
                     assert!(points.len() == 3 || points.len() == 4);
-                    if points.len() == 3 {
-                        faces.push(Geometry::triangle([
-                            **points.get(0).unwrap(),
-                            **points.get(1).unwrap(),
-                            **points.get(2).unwrap(),
-                        ]))
-                    } else {
+                    faces.push(Geometry::triangle([
+                        **points.get(0).unwrap(),
+                        **points.get(1).unwrap(),
+                        **points.get(2).unwrap(),
+                    ]));
+                    if points.len() == 4 {
                         faces.push(Geometry::triangle_strip(vec![
-                            **points.get(0).unwrap(),
-                            **points.get(1).unwrap(),
                             **points.get(2).unwrap(),
                             **points.get(3).unwrap(),
-                        ]))
+                            **points.get(0).unwrap(),
+                        ]));
                     }
                 }
                 _ => (),
