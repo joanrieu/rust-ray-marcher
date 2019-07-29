@@ -17,7 +17,7 @@ type Vector = nalgebra::Vector3<Float>;
 
 enum Geometry {
     Sphere {
-        position: Point,
+        center: Point,
         radius: Float,
     },
     Triangle {
@@ -107,8 +107,8 @@ impl Geometry {
 
     fn distance(&self, point: &Point, settings: &RendererSettings) -> (&Geometry, Float) {
         match self {
-            Geometry::Sphere { position, radius } => {
-                (self, nalgebra::distance(point, position) - radius)
+            Geometry::Sphere { center, radius } => {
+                (self, nalgebra::distance(point, center) - radius)
             }
             Geometry::Triangle {
                 axes: _,
@@ -228,9 +228,9 @@ fn march_ray(
 fn normal(geometry: &Geometry, point: &Point) -> UnitVector {
     match geometry {
         Geometry::Sphere {
-            position,
+            center,
             radius: _,
-        } => UnitVector::new_normalize(point - position),
+        } => UnitVector::new_normalize(point - center),
         Geometry::Triangle {
             axes,
             bounding_sphere_center: _,
@@ -249,7 +249,7 @@ fn main() {
     let scene = vec![
         Mesh {
             geometry: Geometry::Sphere {
-                position: Point::new(3.0, 2.0, -10.0),
+                center: Point::new(3.0, 2.0, -10.0),
                 radius: 3.0,
             },
             material: red_material,
