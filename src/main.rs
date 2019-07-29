@@ -158,7 +158,7 @@ impl Geometry {
     }
 }
 
-fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
+fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings, filename: &String) {
     let projection_matrix =
         nalgebra::Perspective3::new(camera.aspect, camera.fovy, camera.z_near, camera.z_far);
     let view_matrix = nalgebra::Isometry3::look_at_rh(&camera.eye, &camera.target, &camera.up);
@@ -179,7 +179,7 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
     let bar = indicatif::ProgressBar::new((width * height) as u64);
     bar.set_style(
         indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue} [ETA: {eta}]")
+            .template("[{elapsed_precise}] {msg:10} {bar:40.cyan/blue} [ETA: {eta}]")
             .progress_chars("##-"),
     );
     bar.enable_steady_tick(400);
@@ -209,7 +209,7 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
             (height / settings.anti_aliasing as Float) as Integer,
             image::FilterType::Gaussian,
         )
-        .save("render.png")
+        .save(filename)
         .unwrap();
     bar.finish();
 }
@@ -318,59 +318,63 @@ fn normal(geometry: &Geometry, point: &Point) -> UnitVector {
 }
 
 fn main() {
-    let red_material = Material {
-        base_color: Color::new(1.0, 0.0, 0.0),
-        specular: 1.0,
-        diffuse: 1.0,
-        shininess: 10.0,
-        is_light: false,
-    };
-    let light_material = Material {
-        base_color: Color::new(1.0, 1.0, 1.0),
-        specular: 0.0,
-        diffuse: 0.0,
-        shininess: 0.0,
-        is_light: true,
-    };
-    let scene = vec![
-        Mesh {
-            geometry: Geometry::Sphere {
-                center: Point::new(3.0, 2.0, -10.0),
-                radius: 3.0,
+    let frames = 40;
+    for frame in 0..frames {
+        let red_material = Material {
+            base_color: Color::new(1.0, 0.0, 0.0),
+            specular: 1.0,
+            diffuse: 1.0,
+            shininess: 10.0,
+            is_light: false,
+        };
+        let light_material = Material {
+            base_color: Color::new(1.0, 1.0, 1.0),
+            specular: 0.0,
+            diffuse: 0.0,
+            shininess: 0.0,
+            is_light: true,
+        };
+        let angle = (frame as Float / frames as Float) * 2.0 * std::f32::consts::PI;
+        let up = nalgebra::Unit::new_normalize(Vector::new(0.0, 0.0, 1.0));
+        let rotation = nalgebra::Isometry3::rotation(up.into_inner() * angle);
+        let light = rotation * Point::new(10.0, 2.0, -10.0);
+        let scene = vec![
+            Mesh {
+                geometry: Geometry::Sphere {
+                    center: light,
+                    radius: 1.0,
+                },
+                material: light_material,
             },
-            material: light_material,
-        },
-        Mesh {
-            geometry: Geometry::triangle_strip(vec![
-                Point::new(-2.0, 1.0, 0.0),
-                Point::new(-3.0, 0.0, 0.0),
-                Point::new(-2.0, 0.0, 0.0),
-                Point::new(-1.0, -3.0, 1.0),
-            ]),
-            material: red_material,
-        },
-        Mesh {
-            geometry: load_obj("teapot-low.obj"),
-            material: red_material,
-        },
-    ];
-    let camera = Camera {
-        eye: Point::new(10.0, 50.0, 0.0),
-        target: Point::new(0.0, 0.0, 0.0),
-        up: nalgebra::Unit::new_normalize(Vector::new(0.0, 0.0, 1.0)),
-        aspect: 3.0 / 2.0,
-        fovy: 3.14 / 4.0,
-        z_near: 1.0,
-        z_far: 100.0,
-    };
-    let settings = RendererSettings {
-        definition: 400,
-        anti_aliasing: 1,
-        epsilon: 1e-3,
-        ambient_light: 0.2,
-        // max_bounces: 3,
-    };
-    render(&scene, &camera, &settings)
+            Mesh {
+                geometry: load_obj("teapot-low.obj"),
+                material: red_material,
+            },
+        ];
+        let camera = Camera {
+            eye: Point::new(10.0, 50.0, 0.0),
+            target: Point::new(0.0, 0.0, 0.0),
+            up,
+            aspect: 3.0 / 2.0,
+            fovy: 3.14 / 4.0,
+            z_near: 1.0,
+            z_far: 100.0,
+        };
+        let settings = RendererSettings {
+            // definition: 400,
+            definition: 40,
+            anti_aliasing: 1,
+            epsilon: 1e-3,
+            ambient_light: 0.2,
+            // max_bounces: 3,
+        };
+        render(
+            &scene,
+            &camera,
+            &settings,
+            &format!("render-{:03}.png", frame),
+        );
+    }
 }
 
 fn load_obj(path: &str) -> Geometry {
