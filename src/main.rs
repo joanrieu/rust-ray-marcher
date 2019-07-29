@@ -105,6 +105,15 @@ impl Geometry {
         }
     }
 
+    fn rectangle(vertices: [Point; 4]) -> Self {
+        Geometry::Group {
+            geometry: vec![
+                Geometry::triangle([vertices[0], vertices[1], vertices[2]]),
+                Geometry::triangle([vertices[2], vertices[3], vertices[0]]),
+            ],
+        }
+    }
+
     fn distance(&self, point: &Point, settings: &RendererSettings) -> (&Geometry, Float) {
         match self {
             Geometry::Sphere { center, radius } => {
@@ -227,10 +236,7 @@ fn march_ray(
 
 fn normal(geometry: &Geometry, point: &Point) -> UnitVector {
     match geometry {
-        Geometry::Sphere {
-            center,
-            radius: _,
-        } => UnitVector::new_normalize(point - center),
+        Geometry::Sphere { center, radius: _ } => UnitVector::new_normalize(point - center),
         Geometry::Triangle {
             axes,
             bounding_sphere_center: _,
@@ -319,18 +325,19 @@ fn load_obj(path: &str) -> Geometry {
                         })
                         .map(|index| points.get(index - 1).expect("cannot find vertex at index"))
                         .collect::<Vec<&Point>>();
-                    assert!(points.len() == 3 || points.len() == 4);
-                    faces.push(Geometry::triangle([
-                        **points.get(0).unwrap(),
-                        **points.get(1).unwrap(),
-                        **points.get(2).unwrap(),
-                    ]));
-                    if points.len() == 4 {
-                        faces.push(Geometry::triangle([
+                    match points.len() {
+                        3 => faces.push(Geometry::triangle([
+                            **points.get(0).unwrap(),
+                            **points.get(1).unwrap(),
+                            **points.get(2).unwrap(),
+                        ])),
+                        4 => faces.push(Geometry::rectangle([
+                            **points.get(0).unwrap(),
+                            **points.get(1).unwrap(),
                             **points.get(2).unwrap(),
                             **points.get(3).unwrap(),
-                            **points.get(0).unwrap(),
-                        ]));
+                        ])),
+                        _ => panic!("unexpected vertex count"),
                     }
                 }
                 _ => (),
