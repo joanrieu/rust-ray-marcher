@@ -21,6 +21,8 @@ enum Geometry {
         radius: Float,
     },
     Triangle {
+        vertices: [Point; 3],
+        axes: [Vector; 3],
         bounding_sphere_center: Point,
         bounding_sphere_radius: Float,
         transform_01: Matrix,
@@ -35,15 +37,10 @@ type Matrix = nalgebra::Matrix4<Float>;
 
 #[derive(Clone, Copy)]
 struct Material {
-    color: Color,
+    base_color: Color,
 }
 
-#[derive(Clone, Copy)]
-struct Color {
-    red: Float,
-    green: Float,
-    blue: Float,
-}
+type Color = Vector;
 
 struct Camera {
     eye: Point,
@@ -86,6 +83,8 @@ impl Geometry {
         let transform_10 = translation_10.to_homogeneous() * base_change_10.to_homogeneous();
         let transform_01 = transform_10.pseudo_inverse(0.0).unwrap();
         Geometry::Triangle {
+            vertices,
+            axes: [x_axis, y_axis, z_axis],
             bounding_sphere_center,
             bounding_sphere_radius,
             transform_01,
@@ -108,10 +107,14 @@ impl Geometry {
         }
     }
 
-    fn distance(&self, point: &Point, settings: &RendererSettings) -> Float {
+    fn distance(&self, point: &Point, settings: &RendererSettings) -> (&Geometry, Float) {
         match self {
-            Geometry::Sphere { position, radius } => nalgebra::distance(point, position) - radius,
+            Geometry::Sphere { position, radius } => {
+                (self, nalgebra::distance(point, position) - radius)
+            }
             Geometry::Triangle {
+                vertices,
+                axes,
                 bounding_sphere_center,
                 bounding_sphere_radius,
                 transform_01,
@@ -119,9 +122,9 @@ impl Geometry {
             } => {
                 let bounding_sphere_distance =
                     nalgebra::distance(point, bounding_sphere_center) - *bounding_sphere_radius;
-                let triangle_depth = 0.1;
+                let triangle_depth = 1e-2;
                 if bounding_sphere_distance > triangle_depth {
-                    bounding_sphere_distance
+                    (self, bounding_sphere_distance)
                 } else {
                     let point_0 = point;
                     let point_1 =
@@ -132,29 +135,15 @@ impl Geometry {
                     let w = (x + y).max(1.0);
                     let projected_1 = nalgebra::Vector4::from([x, y, z, w]);
                     let projected_0 = Point::from_homogeneous(transform_10 * projected_1).unwrap();
-                    nalgebra::distance(point_0, &projected_0)
+                    (self, nalgebra::distance(point_0, &projected_0))
                 }
             }
             Geometry::Group { geometry } => geometry
                 .iter()
                 .map(|geometry| geometry.distance(point, settings))
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                 .unwrap(),
         }
-    }
-}
-
-impl Color {
-    fn new(red: Float, green: Float, blue: Float) -> Color {
-        Color { red, green, blue }
-    }
-
-    fn to_pixel(&self) -> [u8; 3] {
-        [
-            (self.red * 255.0) as u8,
-            (self.green * 255.0) as u8,
-            (self.blue * 255.0) as u8,
-        ]
     }
 }
 
@@ -189,9 +178,13 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         width as Integer,
         height as Integer,
         |x, y| {
-            let pixel = image::Rgb(render_pixel(x, y).to_pixel());
+            let color = render_pixel(x, y);
             bar.inc(1);
-            pixel
+            image::Rgb([
+                (color.x * 255.0) as u8,
+                (color.y * 255.0) as u8,
+                (color.z * 255.0) as u8,
+            ])
         },
     ));
     bar.set_message("Saving");
@@ -216,24 +209,43 @@ fn march_ray(
     let mut t = 0.0;
     while t < max_distance {
         let point = origin + t * direction.into_inner();
-        let (mesh, distance) = scene
+        let (mesh, (geometry, distance)) = scene
             .iter()
             .map(|mesh| (mesh, mesh.geometry.distance(&point, settings)))
-            .min_by(|(_mesh1, distance1), (_mesh2, distance2)| {
-                distance1.partial_cmp(distance2).unwrap()
-            })
+            .min_by(
+                |(_mesh_1, (_geometry_1, distance_1)), (_mesh_2, (_geometry_2, distance_2))| {
+                    distance_1.partial_cmp(distance_2).unwrap()
+                },
+            )
             .unwrap();
         if distance < settings.epsilon {
-            return mesh.material.color;
+            let normal = normal(geometry, &point);
+            let cos = direction.into_inner().dot(&normal.into_inner());
+            return mesh.material.base_color.scale(cos.abs());
         }
         t += distance;
     }
     settings.ambient_color
 }
 
+fn normal(geometry: &Geometry, point: &Point) -> UnitVector {
+    match geometry {
+        Geometry::Sphere { position, radius } => UnitVector::new_normalize(point - position),
+        Geometry::Triangle {
+            vertices,
+            axes,
+            bounding_sphere_center,
+            bounding_sphere_radius,
+            transform_01,
+            transform_10,
+        } => UnitVector::new_normalize(axes[2]),
+        Geometry::Group { geometry } => unimplemented!(),
+    }
+}
+
 fn main() {
     let red_material = Material {
-        color: Color::new(1.0, 0.0, 0.0),
+        base_color: Color::new(1.0, 0.0, 0.0),
     };
     let scene = vec![
         Mesh {
@@ -258,7 +270,7 @@ fn main() {
         },
     ];
     let camera = Camera {
-        eye: Point::new(0.0, 50.0, 0.0),
+        eye: Point::new(10.0, 50.0, 0.0),
         target: Point::new(0.0, 0.0, 0.0),
         up: nalgebra::Unit::new_unchecked(Vector::new(0.0, 0.0, 1.0)),
         aspect: 3.0 / 2.0,
@@ -269,7 +281,7 @@ fn main() {
     let settings = RendererSettings {
         definition: 400,
         anti_aliasing: 1,
-        epsilon: 0.001,
+        epsilon: 1e-3,
         ambient_color: Color::new(0.2, 0.2, 0.2),
     };
     render(&scene, &camera, &settings)
@@ -315,7 +327,7 @@ fn load_obj(path: &str) -> Geometry {
                         **points.get(2).unwrap(),
                     ]));
                     if points.len() == 4 {
-                        faces.push(Geometry::triangle_strip(vec![
+                        faces.push(Geometry::triangle([
                             **points.get(2).unwrap(),
                             **points.get(3).unwrap(),
                             **points.get(0).unwrap(),
