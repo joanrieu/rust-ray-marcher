@@ -37,6 +37,10 @@ type Matrix = nalgebra::Matrix4<Float>;
 #[derive(Clone, Copy)]
 struct Material {
     base_color: Color,
+    diffuse: Float,
+    specular: Float,
+    shininess: Float,
+    is_light: bool,
 }
 
 type Color = Vector;
@@ -59,7 +63,8 @@ struct RendererSettings {
     definition: Integer,
     anti_aliasing: Integer,
     epsilon: Float,
-    ambient_color: Color,
+    ambient_light: Float,
+    // max_bounces: Integer,
 }
 
 type Integer = u32;
@@ -186,11 +191,15 @@ fn render(scene: &Scene, camera: &Camera, settings: &RendererSettings) {
         |x, y| {
             let color = render_pixel(x, y);
             bar.inc(1);
-            image::Rgb([
-                (color.x * 255.0) as u8,
-                (color.y * 255.0) as u8,
-                (color.z * 255.0) as u8,
-            ])
+            *color
+                .map(|color| {
+                    image::Rgb([
+                        (color.x.min(1.0) * 255.0) as u8,
+                        (color.y.min(1.0) * 255.0) as u8,
+                        (color.z.min(1.0) * 255.0) as u8,
+                    ])
+                })
+                .get_or_insert(image::Rgb([0, 0, 0]))
         },
     ));
     bar.set_message("Saving");
@@ -211,12 +220,16 @@ fn march_ray(
     max_distance: Float,
     scene: &Scene,
     settings: &RendererSettings,
-) -> Color {
-    let mut t = 0.0;
+    // bounces: Integer,
+) -> Option<Color> {
+    // if bounces < settings.max_bounces {
+    let direction = direction.into_inner();
+    let mut t = 10.0 * settings.epsilon;
     while t < max_distance {
-        let point = origin + t * direction.into_inner();
+        let point = origin + t * direction;
         let (mesh, (geometry, distance)) = scene
             .iter()
+            // .filter(|mesh| !mesh.material.is_light)
             .map(|mesh| (mesh, mesh.geometry.distance(&point, settings)))
             .min_by(
                 |(_mesh_1, (_geometry_1, distance_1)), (_mesh_2, (_geometry_2, distance_2))| {
@@ -225,13 +238,69 @@ fn march_ray(
             )
             .unwrap();
         if distance < settings.epsilon {
-            let normal = normal(geometry, &point);
-            let cos = direction.into_inner().dot(&normal.into_inner());
-            return mesh.material.base_color.scale(cos.abs());
+            if mesh.material.is_light {
+                return Some(mesh.material.base_color);
+            }
+            // all vectors start at the contact point
+            let view = -direction;
+            let normal_signed = normal(geometry, &point).into_inner();
+            let normal = normal_signed.dot(&view).signum() * normal_signed;
+            // let reflected = incident - 2.0 * normal.dot(&incident) * normal;
+            // let reflected_color = march_ray(
+            //     point,
+            //     UnitVector::new_normalize(reflected),
+            //     max_distance,
+            //     scene,
+            //     settings,
+            //     bounces + 1,
+            // );
+            // let reflection = normal.dot(&incident).abs();
+            // return reflected_color.scale(reflection);
+            return Some(
+                scene
+                    .iter()
+                    .filter(|mesh| mesh.material.is_light)
+                    .map(|light_mesh| {
+                        let light = match light_mesh.geometry {
+                            Geometry::Sphere { center, radius: _ } => center - point,
+                            _ => unimplemented!("lights can only be spheres"),
+                        }
+                        .normalize();
+                        let k_diffuse = mesh.material.diffuse * light.dot(&normal).max(0.0);
+                        let reflected = 2.0 * normal.dot(&light) * normal - light;
+                        let k_specular = mesh.material.specular
+                            * reflected.dot(&view).max(0.0).powf(mesh.material.shininess);
+                        // if k > 0.0 {
+                        //     println!("l.n = {} r.v = {} k = {}", l_dot_n, r_dot_v, k);
+                        // }
+                        let diffuse_color = Color::new(
+                            light_mesh
+                                .material
+                                .base_color
+                                .x
+                                .min(mesh.material.base_color.x),
+                            light_mesh
+                                .material
+                                .base_color
+                                .y
+                                .min(mesh.material.base_color.y),
+                            light_mesh
+                                .material
+                                .base_color
+                                .z
+                                .min(mesh.material.base_color.z),
+                        );
+                        settings.ambient_light * mesh.material.base_color
+                            + k_diffuse * diffuse_color
+                            + k_specular * light_mesh.material.base_color
+                    })
+                    .sum(),
+            );
         }
         t += distance;
     }
-    settings.ambient_color
+    // }
+    None
 }
 
 fn normal(geometry: &Geometry, point: &Point) -> UnitVector {
@@ -251,6 +320,17 @@ fn normal(geometry: &Geometry, point: &Point) -> UnitVector {
 fn main() {
     let red_material = Material {
         base_color: Color::new(1.0, 0.0, 0.0),
+        specular: 1.0,
+        diffuse: 1.0,
+        shininess: 10.0,
+        is_light: false,
+    };
+    let light_material = Material {
+        base_color: Color::new(1.0, 1.0, 1.0),
+        specular: 0.0,
+        diffuse: 0.0,
+        shininess: 0.0,
+        is_light: true,
     };
     let scene = vec![
         Mesh {
@@ -258,7 +338,7 @@ fn main() {
                 center: Point::new(3.0, 2.0, -10.0),
                 radius: 3.0,
             },
-            material: red_material,
+            material: light_material,
         },
         Mesh {
             geometry: Geometry::triangle_strip(vec![
@@ -277,7 +357,7 @@ fn main() {
     let camera = Camera {
         eye: Point::new(10.0, 50.0, 0.0),
         target: Point::new(0.0, 0.0, 0.0),
-        up: nalgebra::Unit::new_unchecked(Vector::new(0.0, 0.0, 1.0)),
+        up: nalgebra::Unit::new_normalize(Vector::new(0.0, 0.0, 1.0)),
         aspect: 3.0 / 2.0,
         fovy: 3.14 / 4.0,
         z_near: 1.0,
@@ -287,7 +367,8 @@ fn main() {
         definition: 400,
         anti_aliasing: 1,
         epsilon: 1e-3,
-        ambient_color: Color::new(0.2, 0.2, 0.2),
+        ambient_light: 0.2,
+        // max_bounces: 3,
     };
     render(&scene, &camera, &settings)
 }
