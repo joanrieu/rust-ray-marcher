@@ -21,7 +21,6 @@ enum Geometry {
         radius: Float,
     },
     Triangle {
-        vertices: [Point; 3],
         axes: [Vector; 3],
         bounding_sphere_center: Point,
         bounding_sphere_radius: Float,
@@ -83,7 +82,6 @@ impl Geometry {
         let transform_10 = translation_10.to_homogeneous() * base_change_10.to_homogeneous();
         let transform_01 = transform_10.pseudo_inverse(0.0).unwrap();
         Geometry::Triangle {
-            vertices,
             axes: [x_axis, y_axis, z_axis],
             bounding_sphere_center,
             bounding_sphere_radius,
@@ -113,8 +111,7 @@ impl Geometry {
                 (self, nalgebra::distance(point, position) - radius)
             }
             Geometry::Triangle {
-                vertices,
-                axes,
+                axes: _,
                 bounding_sphere_center,
                 bounding_sphere_radius,
                 transform_01,
@@ -230,16 +227,18 @@ fn march_ray(
 
 fn normal(geometry: &Geometry, point: &Point) -> UnitVector {
     match geometry {
-        Geometry::Sphere { position, radius } => UnitVector::new_normalize(point - position),
+        Geometry::Sphere {
+            position,
+            radius: _,
+        } => UnitVector::new_normalize(point - position),
         Geometry::Triangle {
-            vertices,
             axes,
-            bounding_sphere_center,
-            bounding_sphere_radius,
-            transform_01,
-            transform_10,
+            bounding_sphere_center: _,
+            bounding_sphere_radius: _,
+            transform_01: _,
+            transform_10: _,
         } => UnitVector::new_normalize(axes[2]),
-        Geometry::Group { geometry } => unimplemented!(),
+        Geometry::Group { geometry: _ } => unimplemented!(),
     }
 }
 
